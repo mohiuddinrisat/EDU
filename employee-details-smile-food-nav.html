@@ -1,0 +1,1317 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smile Food Products Limited - Employee Details</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+  <style>
+    body {
+      background: linear-gradient(to right, #e0eafc, #cfdef3);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      font-family: 'Arial', sans-serif;
+    }
+    .form-container {
+      background: white;
+      border-radius: 10px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+      padding: 2rem;
+      width: 100%;
+      max-width: 600px;
+    }
+    .input-field, .select-field {
+      transition: all 0.3s ease;
+      border: 1px solid #e5e7eb;
+    }
+    .input-field:focus, .select-field:focus {
+      border-color: #4f46e5;
+      box-shadow: 0 0 5px rgba(79, 70, 229, 0.3);
+    }
+    .btn {
+      transition: transform 0.2s, background 0.3s;
+    }
+    .btn:hover {
+      transform: scale(1.05);
+      background: linear-gradient(to right, #3b82f6, #1e40af);
+    }
+    .excel-header {
+      background-color: #d3d3d3;
+      font-weight: bold;
+      text-align: center;
+      border: 1px solid #e5e7eb;
+      padding: 0.5rem;
+    }
+    .excel-cell {
+      border: 1px solid #e5e7eb;
+      padding: 0.5rem;
+    }
+    .preview-table {
+      border-collapse: collapse;
+      width: 100%;
+    }
+    .preview-table th, .preview-table td {
+      border: 1px solid #e5e7eb;
+      padding: 0.5rem;
+      text-align: left;
+    }
+    .preview-table th {
+      background-color: #d3d3d3;
+      font-weight: bold;
+    }
+    .action-btn {
+      font-weight: bold;
+      padding: 0.5rem 1rem;
+    }
+    .alert {
+      transition: opacity 0.5s;
+    }
+    .pdf-btn::before {
+      content: '\1F4C4'; /* PDF icon (Unicode document) */
+      margin-right: 0.5rem;
+    }
+    .reports-menu {
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+    .nav-bar {
+      background: #4f46e5;
+      width: 100%;
+      padding: 1rem 0;
+      position: fixed;
+      top: 80px;
+      z-index: 10;
+    }
+    .nav-btn {
+      color: white;
+      padding: 0.5rem 1rem;
+      margin: 0 0.5rem;
+      border-radius: 5px;
+      transition: background 0.3s;
+    }
+    .nav-btn:hover {
+      background: #7f9cf5;
+    }
+    .nav-btn.active {
+      background: #1e40af;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body class="flex items-center justify-center">
+  <header class="w-full bg-indigo-600 text-white py-6 text-center fixed top-0">
+    <h1 class="text-3xl font-bold">Smile Food Products Limited</h1>
+    <p class="mt-2 text-sm"></p>
+  </header>
+  <nav class="nav-bar flex justify-center">
+    <button id="navCreate" class="nav-btn active">Create Employee</button>
+    <button id="navSearch" class="nav-btn">Employee Search</button>
+    <button id="navReports" class="nav-btn">Reports</button>
+  </nav>
+  <main class="mt-32 w-full px-4 flex-1 flex items-center justify-center">
+    <div class="form-container">
+      <div id="createSection">
+        <form id="employeeForm" class="space-y-4">
+          <h2 class="text-lg font-bold text-gray-800">Employee Information</h2>
+          <div>
+            <label for="name" class="block text-sm excel-header">Name</label>
+            <input type="text" id="name" name="name" required
+                   class="input-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+          </div>
+          <div>
+            <label for="email" class="block text-sm excel-header">Email</label>
+            <input type="email" id="email" name="email" required placeholder="e.g., john.doe"
+                   class="input-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+          </div>
+          <div>
+            <label for="role" class="block text-sm excel-header">Role</label>
+            <select id="role" name="role" required
+                    class="select-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              <option value="" disabled selected>Select or type a role</option>
+            </select>
+            <input type="text" id="newRole" placeholder="Type new role if not in list" class="input-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm hidden">
+          </div>
+          <div>
+            <label for="department" class="block text-sm excel-header">Department</label>
+            <select id="department" name="department" required
+                    class="select-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              <option value="" disabled selected>Select or type a department</option>
+            </select>
+            <input type="text" id="newDepartment" placeholder="Type new department if not in list" class="input-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm hidden">
+          </div>
+          <div>
+            <label for="location" class="block text-sm excel-header">Job Location</label>
+            <select id="location" name="location" required
+                    class="select-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              <option value="" disabled selected>Select or type a location</option>
+            </select>
+            <input type="text" id="newLocation" placeholder="Type new location if not in list" class="input-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm hidden">
+          </div>
+          <div>
+            <label for="jobTitle" class="block text-sm excel-header">Job Title</label>
+            <select id="jobTitle" name="jobTitle" required
+                    class="select-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              <option value="" disabled selected>Select or type a job title</option>
+            </select>
+            <input type="text" id="newJobTitle" placeholder="Type new job title if not in list" class="input-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm hidden">
+          </div>
+          <div>
+            <label for="age" class="block text-sm excel-header">Age</label>
+            <select id="age" name="age" required
+                    class="select-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+              <option value="" disabled selected>Select or type an age</option>
+            </select>
+            <input type="number" id="newAge" placeholder="Type new age (18-100)" min="18" max="100" class="input-field excel-cell mt-1 block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm hidden">
+          </div>
+          <div id="alertMessage" class="alert text-red-500 text-sm hidden"></div>
+          <div class="flex space-x-4">
+            <button type="submit" id="submitBtn" class="btn flex-1 bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">
+              Save
+            </button>
+            <button type="button" id="clearAllBtn" class="btn flex-1 bg-red-600 text-white py-2 px-4 rounded-md hover:bg-red-700">
+              Clear All Data
+            </button>
+          </div>
+        </form>
+      </div>
+      <div id="searchSection" class="hidden">
+        <h2 class="text-lg font-semibold text-gray-800">Employee Search</h2>
+        <div class="mt-4 flex space-x-4">
+          <select id="searchField" class="select-field border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+            <option value="" disabled selected>Select search field</option>
+            <option value="name">Name</option>
+            <option value="email">Email</option>
+            <option value="role">Role</option>
+            <option value="department">Department</option>
+            <option value="location">Job Location</option>
+            <option value="jobtitle">Job Title</option>
+            <option value="age">Age</option>
+          </select>
+          <select id="searchInput" class="select-field border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm w-full">
+            <option value="" disabled selected>Select value</option>
+          </select>
+        </div>
+        <p id="searchFieldError" class="text-red-500 text-sm mt-1 hidden">Please select a valid search field.</p>
+        <ul id="employeeTable" class="mt-4 grid gap-4"></ul>
+        <div class="mt-6">
+          <button type="button" id="addNewBtn" class="btn bg-indigo-600 text-white py-2 px-4 rounded-md hover:bg-indigo-700">
+            Add New
+          </button>
+        </div>
+      </div>
+      <div id="reportsSection" class="hidden">
+        <div class="reports-menu">
+          <h2 class="text-lg font-semibold text-gray-800 cursor-pointer" id="reportsToggle">Reports</h2>
+          <div id="reportsContent" class="mt-4">
+            <h3 class="text-md font-semibold text-gray-800">Search and Preview Reports</h3>
+            <div class="flex space-x-4 mt-2">
+              <select id="reportType" class="select-field border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <option value="detailed">Detailed Report</option>
+                <option value="summary">Summary Report</option>
+              </select>
+              <select id="filterField" class="select-field border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm">
+                <option value="" disabled selected>Select filter field</option>
+                <option value="name">Name</option>
+                <option value="email">Email</option>
+                <option value="role">Role</option>
+                <option value="department">Department</option>
+                <option value="location">Job Location</option>
+                <option value="jobtitle">Job Title</option>
+                <option value="age">Age</option>
+              </select>
+              <select id="filterInput" class="select-field border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm w-full">
+                <option value="" disabled selected>Select value</option>
+              </select>
+            </div>
+            <p id="filterFieldError" class="text-red-500 text-sm mt-1 hidden">Please select a valid filter field.</p>
+            <div id="reportPreview" class="mt-4"></div>
+            <div class="flex space-x-4 mt-4 flex-wrap">
+              <button type="button" id="downloadExcelDetailedBtn" class="btn flex-1 bg-green-600 text-white py-2 px-4 rounded-md hover:bg-green-700">
+                Download Detailed Excel
+              </button>
+              <button type="button" id="downloadExcelSummaryBtn" class="btn flex-1 bg-teal-600 text-white py-2 px-4 rounded-md hover:bg-teal-700">
+                Download Summary Excel
+              </button>
+              <button type="button" id="downloadPdfDetailedBtn" class="pdf-btn btn flex-1 bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700">
+                Download Detailed PDF
+              </button>
+              <button type="button" id="downloadPdfSummaryBtn" class="pdf-btn btn flex-1 bg-purple-600 text-white py-2 px-4 rounded-md hover:bg-purple-700">
+                Download Summary PDF
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <script>
+    // Load jsPDF
+    const { jsPDF } = window.jspdf;
+
+    // Check local storage availability
+    function storageAvailable(type) {
+      let storage;
+      try {
+        storage = window[type];
+        const x = '__storage_test__';
+        storage.setItem(x, x);
+        storage.removeItem(x);
+        return true;
+      } catch (e) {
+        alert('Local storage is unavailable. Please enable it in your browser settings to save employee data.');
+        return false;
+      }
+    }
+
+    // Load data from localStorage or initialize defaults
+    let employees = [];
+    let departments = JSON.parse(localStorage.getItem('departments')) || [
+      'Sales', 'Information Technology', 'Human Resources', 'Marketing', 'Finance'
+    ];
+    let roles = JSON.parse(localStorage.getItem('roles')) || [
+      'Manager', 'Developer', 'Analyst', 'Sales Representative', 'Director'
+    ];
+    let locations = JSON.parse(localStorage.getItem('locations')) || [
+      'New York', 'Chicago', 'San Francisco', 'London', 'Remote'
+    ];
+    let jobTitles = JSON.parse(localStorage.getItem('jobTitles')) || [
+      'Senior Sales Manager', 'Software Engineer', 'Data Analyst', 'Marketing Coordinator', 'Financial Controller'
+    ];
+    let ages = JSON.parse(localStorage.getItem('ages')) || [
+      '18', '25', '30', '35', '40'
+    ];
+
+    if (storageAvailable('localStorage')) {
+      employees = JSON.parse(localStorage.getItem('employees')) || [];
+      console.log('Initial employees loaded:', employees);
+    }
+
+    // Ensure existing employees have all fields
+    employees = employees.map(emp => ({
+      ...emp,
+      jobTitle: emp.jobTitle || 'N/A',
+      age: emp.age || 0,
+      location: emp.location || 'N/A'
+    }));
+    if (storageAvailable('localStorage')) {
+      localStorage.setItem('employees', JSON.stringify(employees));
+      console.log('Employees initialized and saved:', employees);
+    }
+
+    let editIndex = null;
+    const emailExtension = '@smilefoodproducts.com';
+    const validFields = ['name', 'email', 'role', 'department', 'location', 'jobtitle', 'age'];
+
+    // Get form elements
+    const form = document.getElementById('employeeForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const alertMessage = document.getElementById('alertMessage');
+    const emailInput = document.getElementById('email');
+    const roleSelect = document.getElementById('role');
+    const newRoleInput = document.getElementById('newRole');
+    const departmentSelect = document.getElementById('department');
+    const newDepartmentInput = document.getElementById('newDepartment');
+    const locationSelect = document.getElementById('location');
+    const newLocationInput = document.getElementById('newLocation');
+    const jobTitleSelect = document.getElementById('jobTitle');
+    const newJobTitleInput = document.getElementById('newJobTitle');
+    const ageSelect = document.getElementById('age');
+    const newAgeInput = document.getElementById('newAge');
+    const inputs = [
+      document.getElementById('name'),
+      emailInput,
+      roleSelect,
+      departmentSelect,
+      locationSelect,
+      jobTitleSelect,
+      ageSelect
+    ];
+
+    // Navigation handling
+    const navCreate = document.getElementById('navCreate');
+    const navSearch = document.getElementById('navSearch');
+    const navReports = document.getElementById('navReports');
+    const createSection = document.getElementById('createSection');
+    const searchSection = document.getElementById('searchSection');
+    const reportsSection = document.getElementById('reportsSection');
+
+    function showSection(sectionId) {
+      createSection.classList.add('hidden');
+      searchSection.classList.add('hidden');
+      reportsSection.classList.add('hidden');
+      navCreate.classList.remove('active');
+      navSearch.classList.remove('active');
+      navReports.classList.remove('active');
+
+      if (sectionId === 'create') {
+        createSection.classList.remove('hidden');
+        navCreate.classList.add('active');
+        inputs[0].focus();
+      } else if (sectionId === 'search') {
+        searchSection.classList.remove('hidden');
+        navSearch.classList.add('active');
+      } else if (sectionId === 'reports') {
+        reportsSection.classList.remove('hidden');
+        navReports.classList.add('active');
+      }
+      console.log(`Switched to ${sectionId} section`);
+    }
+
+    navCreate.addEventListener('click', () => showSection('create'));
+    navSearch.addEventListener('click', () => showSection('search'));
+    navReports.addEventListener('click', () => showSection('reports'));
+
+    // Handle email extension on blur
+    emailInput.addEventListener('blur', function() {
+      let value = this.value.trim();
+      if (value && !value.includes('@')) {
+        this.value = value;
+        console.log('Email formatted:', value + emailExtension);
+      }
+    });
+
+    // Add Enter key event listener to each input
+    inputs.forEach((input, index) => {
+      input.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          if (index < inputs.length - 1) {
+            inputs[index + 1].focus();
+          } else {
+            form.dispatchEvent(new Event('submit'));
+          }
+        }
+      });
+    });
+
+    // Toggle Reports menu
+    document.getElementById('reportsToggle').addEventListener('click', function() {
+      const content = document.getElementById('reportsContent');
+      content.classList.toggle('hidden');
+    });
+
+    // Populate dropdowns
+    function populateDropdown(selectElement, items) {
+      selectElement.innerHTML = '<option value="" disabled selected>Select or type an option</option>';
+      items.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        option.textContent = item;
+        selectElement.appendChild(option);
+      });
+      const newOption = document.createElement('option');
+      newOption.value = '__new__';
+      newOption.textContent = 'Add new...';
+      selectElement.appendChild(newOption);
+    }
+
+    // Populate search value dropdown
+    function populateSearchDropdown(field, inputElement) {
+      inputElement.innerHTML = '<option value="" disabled selected>Select value</option>';
+      let items = [];
+      switch (field) {
+        case 'role':
+          items = roles;
+          break;
+        case 'department':
+          items = departments;
+          break;
+        case 'location':
+          items = locations;
+          break;
+        case 'jobtitle':
+          items = jobTitles;
+          break;
+        case 'age':
+          items = ages;
+          break;
+        case 'name':
+          items = [...new Set(employees.map(emp => emp.name))];
+          break;
+        case 'email':
+          items = [...new Set(employees.map(emp => emp.email))];
+          break;
+        default:
+          items = [];
+      }
+      items.forEach(item => {
+        const option = document.createElement('option');
+        option.value = item;
+        option.textContent = item;
+        inputElement.appendChild(option);
+      });
+    }
+
+    // Initialize dropdowns
+    populateDropdown(roleSelect, roles);
+    populateDropdown(departmentSelect, departments);
+    populateDropdown(locationSelect, locations);
+    populateDropdown(jobTitleSelect, jobTitles);
+    populateDropdown(ageSelect, ages);
+
+    // Handle new input fields
+    roleSelect.addEventListener('change', function() {
+      if (this.value === '__new__') {
+        newRoleInput.classList.remove('hidden');
+        newRoleInput.focus();
+      } else {
+        newRoleInput.classList.add('hidden');
+      }
+    });
+
+    departmentSelect.addEventListener('change', function() {
+      if (this.value === '__new__') {
+        newDepartmentInput.classList.remove('hidden');
+        newDepartmentInput.focus();
+      } else {
+        newDepartmentInput.classList.add('hidden');
+      }
+    });
+
+    locationSelect.addEventListener('change', function() {
+      if (this.value === '__new__') {
+        newLocationInput.classList.remove('hidden');
+        newLocationInput.focus();
+      } else {
+        newLocationInput.classList.add('hidden');
+      }
+    });
+
+    jobTitleSelect.addEventListener('change', function() {
+      if (this.value === '__new__') {
+        newJobTitleInput.classList.remove('hidden');
+        newJobTitleInput.focus();
+      } else {
+        newJobTitleInput.classList.add('hidden');
+      }
+    });
+
+    ageSelect.addEventListener('change', function() {
+      if (this.value === '__new__') {
+        newAgeInput.classList.remove('hidden');
+        newAgeInput.focus();
+      } else {
+        newAgeInput.classList.add('hidden');
+      }
+    });
+
+    // Update search input based on field selection
+    document.getElementById('searchField').addEventListener('change', function() {
+      const field = this.value;
+      populateSearchDropdown(field, document.getElementById('searchInput'));
+      updateEmployeeList();
+    });
+
+    document.getElementById('filterField').addEventListener('change', function() {
+      const field = this.value;
+      populateSearchDropdown(field, document.getElementById('filterInput'));
+      updateReportPreview();
+    });
+
+    // Simple Levenshtein distance for spelling check
+    function levenshtein(a, b) {
+      const matrix = Array(b.length + 1).fill().map(() => Array(a.length + 1).fill(0));
+      for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
+      for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
+      for (let j = 1; j <= b.length; j++) {
+        for (let i = 1; i <= a.length; i++) {
+          const indicator = a[i - 1] === b[j - 1] ? 0 : 1;
+          matrix[j][i] = Math.min(
+            matrix[j][i - 1] + 1,
+            matrix[j - 1][i] + 1,
+            matrix[j - 1][i - 1] + indicator
+          );
+        }
+      }
+      return matrix[b.length][a.length];
+    }
+
+    // Check for similar entries
+    function checkSpelling(input, list) {
+      const normalizedInput = input.trim().toLowerCase();
+      for (const item of list) {
+        if (levenshtein(normalizedInput, item.toLowerCase()) <= 2 && normalizedInput !== item.toLowerCase()) {
+          return item;
+        }
+      }
+      return null;
+    }
+
+    // Normalize input
+    function normalizeInput(input) {
+      return input.trim().replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    // Form submission handler
+    form.addEventListener('submit', function(e) {
+      e.preventDefault();
+      alertMessage.classList.add('hidden');
+      console.log('Form submitted');
+
+      let emailValue = emailInput.value.trim();
+      if (emailValue && !emailValue.includes('@')) {
+        emailValue += emailExtension;
+      }
+      console.log('Email value:', emailValue);
+
+      // Check for duplicate email
+      if (editIndex === null && employees.some(emp => emp.email.toLowerCase() === emailValue.toLowerCase())) {
+        alertMessage.textContent = "Please don't create duplicates.";
+        alertMessage.classList.remove('hidden');
+        console.log('Duplicate email detected');
+        return;
+      }
+
+      // Get field values
+      let roleValue = roleSelect.value === '__new__' ? newRoleInput.value.trim() : roleSelect.value;
+      let departmentValue = departmentSelect.value === '__new__' ? newDepartmentInput.value.trim() : departmentSelect.value;
+      let locationValue = locationSelect.value === '__new__' ? newLocationInput.value.trim() : locationSelect.value;
+      let jobTitleValue = jobTitleSelect.value === '__new__' ? newJobTitleInput.value.trim() : jobTitleSelect.value;
+      let ageValue = ageSelect.value === '__new__' ? newAgeInput.value.trim() : ageSelect.value;
+      console.log('Form values:', { roleValue, departmentValue, locationValue, jobTitleValue, ageValue });
+
+      // Validate required fields
+      if (!document.getElementById('name').value.trim() || !emailValue || !roleValue || !departmentValue || !locationValue || !jobTitleValue || !ageValue) {
+        alertMessage.textContent = "Please fill in all required fields.";
+        alertMessage.classList.remove('hidden');
+        console.log('Validation failed: Missing required fields');
+        return;
+      }
+
+      // Validate age
+      const ageNum = parseInt(ageValue);
+      if (isNaN(ageNum) || ageNum < 18 || ageNum > 100) {
+        alertMessage.textContent = "Age must be between 18 and 100.";
+        alertMessage.classList.remove('hidden');
+        console.log('Validation failed: Invalid age');
+        return;
+      }
+
+      // Check spelling
+      const roleSuggestion = checkSpelling(roleValue, roles);
+      if (roleSuggestion) {
+        if (confirm(`Did you mean '${roleSuggestion}'? Click OK to use it, or Cancel to keep '${roleValue}'.`)) {
+          roleValue = roleSuggestion;
+        }
+      }
+      const departmentSuggestion = checkSpelling(departmentValue, departments);
+      if (departmentSuggestion) {
+        if (confirm(`Did you mean '${departmentSuggestion}'? Click OK to use it, or Cancel to keep '${departmentValue}'.`)) {
+          departmentValue = departmentSuggestion;
+        }
+      }
+      const locationSuggestion = checkSpelling(locationValue, locations);
+      if (locationSuggestion) {
+        if (confirm(`Did you mean '${locationSuggestion}'? Click OK to use it, or Cancel to keep '${locationValue}'.`)) {
+          locationValue = locationSuggestion;
+        }
+      }
+      const jobTitleSuggestion = checkSpelling(jobTitleValue, jobTitles);
+      if (jobTitleSuggestion) {
+        if (confirm(`Did you mean '${jobTitleSuggestion}'? Click OK to use it, or Cancel to keep '${jobTitleValue}'.`)) {
+          jobTitleValue = jobTitleSuggestion;
+        }
+      }
+
+      // Normalize inputs
+      roleValue = normalizeInput(roleValue);
+      departmentValue = normalizeInput(departmentValue);
+      locationValue = normalizeInput(locationValue);
+      jobTitleValue = normalizeInput(jobTitleValue);
+      console.log('Normalized values:', { roleValue, departmentValue, locationValue, jobTitleValue });
+
+      // Update lists if new
+      if (!roles.map(r => r.toLowerCase()).includes(roleValue.toLowerCase())) {
+        roles.push(roleValue);
+        localStorage.setItem('roles', JSON.stringify(roles));
+        populateDropdown(roleSelect, roles);
+        console.log('New role added:', roleValue);
+      }
+      if (!departments.map(d => d.toLowerCase()).includes(departmentValue.toLowerCase())) {
+        departments.push(departmentValue);
+        localStorage.setItem('departments', JSON.stringify(departments));
+        populateDropdown(departmentSelect, departments);
+        console.log('New department added:', departmentValue);
+      }
+      if (!locations.map(l => l.toLowerCase()).includes(locationValue.toLowerCase())) {
+        locations.push(locationValue);
+        localStorage.setItem('locations', JSON.stringify(locations));
+        populateDropdown(locationSelect, locations);
+        console.log('New location added:', locationValue);
+      }
+      if (!jobTitles.map(j => j.toLowerCase()).includes(jobTitleValue.toLowerCase())) {
+        jobTitles.push(jobTitleValue);
+        localStorage.setItem('jobTitles', JSON.stringify(jobTitles));
+        populateDropdown(jobTitleSelect, jobTitles);
+        console.log('New job title added:', jobTitleValue);
+      }
+      if (!ages.includes(ageValue)) {
+        ages.push(ageValue);
+        localStorage.setItem('ages', JSON.stringify(ages));
+        populateDropdown(ageSelect, ages);
+        console.log('New age added:', ageValue);
+      }
+
+      const employee = {
+        name: document.getElementById('name').value.trim(),
+        email: emailValue,
+        role: roleValue,
+        department: departmentValue,
+        location: locationValue,
+        jobTitle: jobTitleValue,
+        age: ageNum
+      };
+      console.log('Employee object:', employee);
+
+      try {
+        if (editIndex !== null) {
+          employees[editIndex] = employee;
+          editIndex = null;
+          console.log('Employee updated at index:', editIndex);
+        } else {
+          employees.push(employee);
+          console.log('New employee added:', employee);
+        }
+
+        if (storageAvailable('localStorage')) {
+          localStorage.setItem('employees', JSON.stringify(employees));
+          console.log('Employees saved to localStorage:', employees);
+        } else {
+          alertMessage.textContent = "Cannot save data: Local storage is unavailable.";
+          alertMessage.classList.remove('hidden');
+          return;
+        }
+
+        updateEmployeeList();
+        updateReportPreview();
+        form.reset();
+        newRoleInput.classList.add('hidden');
+        newDepartmentInput.classList.add('hidden');
+        newLocationInput.classList.add('hidden');
+        newJobTitleInput.classList.add('hidden');
+        newAgeInput.classList.add('hidden');
+        alertMessage.classList.add('hidden');
+        showSection('search'); // Switch to Employee Search after saving
+      } catch (error) {
+        alertMessage.textContent = "Error saving employee data. Check console for details.";
+        alertMessage.classList.remove('hidden');
+        console.error('Error during submission:', error);
+      }
+    });
+
+    // Add New button handler
+    document.getElementById('addNewBtn').addEventListener('click', function() {
+      form.reset();
+      editIndex = null;
+      newRoleInput.classList.add('hidden');
+      newDepartmentInput.classList.add('hidden');
+      newLocationInput.classList.add('hidden');
+      newJobTitleInput.classList.add('hidden');
+      newAgeInput.classList.add('hidden');
+      alertMessage.classList.add('hidden');
+      showSection('create');
+      console.log('Add New clicked, switched to create section');
+    });
+
+    // Detailed Excel download handler
+    document.getElementById('downloadExcelDetailedBtn').addEventListener('click', function() {
+      if (employees.length === 0) {
+        alert('No employee data to download!');
+        console.log('Download Excel Detailed: No data');
+        return;
+      }
+
+      const workbook = XLSX.utils.book_new();
+      const worksheetData = [];
+
+      worksheetData.push(['Employee Details Report']);
+      worksheetData.push(['Smile Food Products Limited']);
+      worksheetData.push([]);
+
+      worksheetData.push(['Name', 'Email', 'Role', 'Department', 'Job Location', 'Job Title', 'Age']);
+
+      const filterField = normalizeField(document.getElementById('filterField').value);
+      const filterValue = document.getElementById('filterInput').value;
+      const filteredEmployees = filterValue && validFields.includes(filterField)
+        ? employees.filter(emp => {
+            const value = filterField === 'age' ? emp.age.toString() : emp[filterField.replace('jobtitle', 'jobTitle')];
+            return value.toString().toLowerCase() === filterValue.toLowerCase();
+          })
+        : employees;
+
+      filteredEmployees.forEach(emp => {
+        worksheetData.push([
+          emp.name,
+          emp.email,
+          emp.role,
+          emp.department,
+          emp.location,
+          emp.jobTitle,
+          emp.age
+        ]);
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      worksheet['A1'].s = { font: { bold: true }, alignment: { horizontal: 'center' } };
+      worksheet['A2'].s = { font: { bold: true }, alignment: { horizontal: 'center' } };
+      worksheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } }
+      ];
+      ['A4', 'B4', 'C4', 'D4', 'E4', 'F4', 'G4'].forEach(cell => {
+        worksheet[cell].s = { font: { bold: true } };
+      });
+      worksheet['!cols'] = [
+        { wch: 20 }, { wch: 30 }, { wch: 20 }, { wch: 20 }, { wch: 20 }, { wch: 25 }, { wch: 10 }
+      ];
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Employees');
+      XLSX.writeFile(workbook, 'employee_details.xlsx');
+      console.log('Detailed Excel downloaded');
+    });
+
+    // Summary Excel download handler
+    document.getElementById('downloadExcelSummaryBtn').addEventListener('click', function() {
+      if (employees.length === 0) {
+        alert('No employee data to summarize!');
+        console.log('Download Excel Summary: No data');
+        return;
+      }
+
+      const workbook = XLSX.utils.book_new();
+      const worksheetData = [];
+
+      worksheetData.push(['Employee Summary Report']);
+      worksheetData.push(['Smile Food Products Limited']);
+      worksheetData.push([]);
+
+      worksheetData.push(['Department', 'Roles', 'Job Titles', 'Average Age', 'Locations']);
+
+      const filterField = normalizeField(document.getElementById('filterField').value);
+      const filterValue = document.getElementById('filterInput').value;
+      const filteredEmployees = filterValue && validFields.includes(filterField)
+        ? employees.filter(emp => {
+            const value = filterField === 'age' ? emp.age.toString() : emp[filterField.replace('jobtitle', 'jobTitle')];
+            return value.toString().toLowerCase() === filterValue.toLowerCase();
+          })
+        : employees;
+
+      const summary = {};
+      filteredEmployees.forEach(emp => {
+        if (!summary[emp.department]) {
+          summary[emp.department] = {
+            roles: new Set(),
+            jobTitles: new Set(),
+            ages: [],
+            locations: new Set()
+          };
+        }
+        summary[emp.department].roles.add(emp.role);
+        summary[emp.department].jobTitles.add(emp.jobTitle);
+        summary[emp.department].ages.push(emp.age);
+        summary[emp.department].locations.add(emp.location);
+      });
+
+      Object.keys(summary).forEach(dept => {
+        const avgAge = summary[dept].ages.length > 0
+          ? (summary[dept].ages.reduce((sum, age) => sum + age, 0) / summary[dept].ages.length).toFixed(1)
+          : 'N/A';
+        worksheetData.push([
+          dept,
+          Array.from(summary[dept].roles).join(', '),
+          Array.from(summary[dept].jobTitles).join(', '),
+          avgAge,
+          Array.from(summary[dept].locations).join(', ')
+        ]);
+      });
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+      worksheet['A1'].s = { font: { bold: true }, alignment: { horizontal: 'center' } };
+      worksheet['A2'].s = { font: { bold: true }, alignment: { horizontal: 'center' } };
+      worksheet['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 4 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 4 } }
+      ];
+      ['A4', 'B4', 'C4', 'D4', 'E4'].forEach(cell => {
+        worksheet[cell].s = { font: { bold: true } };
+      });
+      worksheet['!cols'] = [
+        { wch: 20 }, { wch: 30 }, { wch: 30 }, { wch: 15 }, { wch: 30 }
+      ];
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, 'Summary');
+      XLSX.writeFile(workbook, 'employee_summary.xlsx');
+      console.log('Summary Excel downloaded');
+    });
+
+    // Detailed PDF download handler
+    document.getElementById('downloadPdfDetailedBtn').addEventListener('click', function() {
+      if (employees.length === 0) {
+        alert('No employee data to download!');
+        console.log('Download PDF Detailed: No data');
+        return;
+      }
+
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Employee Details Report', 105, 15, { align: 'center' });
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Smile Food Products Limited', 105, 25, { align: 'center' });
+
+      const filterField = normalizeField(document.getElementById('filterField').value);
+      const filterValue = document.getElementById('filterInput').value;
+      const filteredEmployees = filterValue && validFields.includes(filterField)
+        ? employees.filter(emp => {
+            const value = filterField === 'age' ? emp.age.toString() : emp[filterField.replace('jobtitle', 'jobTitle')];
+            return value.toString().toLowerCase() === filterValue.toLowerCase();
+          })
+        : employees;
+
+      const tableData = filteredEmployees.map(emp => [
+        emp.name,
+        emp.email,
+        emp.role,
+        emp.department,
+        emp.location,
+        emp.jobTitle,
+        emp.age.toString()
+      ]);
+
+      doc.autoTable({
+        head: [['Name', 'Email', 'Role', 'Department', 'Job Location', 'Job Title', 'Age']],
+        body: tableData,
+        startY: 35,
+        styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 25 },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 30 },
+          6: { cellWidth: 15 }
+        },
+        margin: { top: 35 }
+      });
+
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated on ${new Date().toLocaleDateString()}`, 10, doc.internal.pageSize.height - 10);
+        doc.text('Developed by Mohi Uddin Risat', doc.internal.pageSize.width - 60, doc.internal.pageSize.height - 10);
+      }
+
+      doc.save('employee_details.pdf');
+      console.log('Detailed PDF downloaded');
+    });
+
+    // Summary PDF download handler
+    document.getElementById('downloadPdfSummaryBtn').addEventListener('click', function() {
+      if (employees.length === 0) {
+        alert('No employee data to summarize!');
+        console.log('Download PDF Summary: No data');
+        return;
+      }
+
+      const doc = new jsPDF();
+      doc.setFontSize(18);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Employee Summary Report', 105, 15, { align: 'center' });
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Smile Food Products Limited', 105, 25, { align: 'center' });
+
+      const filterField = normalizeField(document.getElementById('filterField').value);
+      const filterValue = document.getElementById('filterInput').value;
+      const filteredEmployees = filterValue && validFields.includes(filterField)
+        ? employees.filter(emp => {
+            const value = filterField === 'age' ? emp.age.toString() : emp[filterField.replace('jobtitle', 'jobTitle')];
+            return value.toString().toLowerCase() === filterValue.toLowerCase();
+          })
+        : employees;
+
+      const summary = {};
+      filteredEmployees.forEach(emp => {
+        if (!summary[emp.department]) {
+          summary[emp.department] = {
+            roles: new Set(),
+            jobTitles: new Set(),
+            ages: [],
+            locations: new Set()
+          };
+        }
+        summary[emp.department].roles.add(emp.role);
+        summary[emp.department].jobTitles.add(emp.jobTitle);
+        summary[emp.department].ages.push(emp.age);
+        summary[emp.department].locations.add(emp.location);
+      });
+
+      const tableData = Object.keys(summary).map(dept => {
+        const avgAge = summary[dept].ages.length > 0
+          ? (summary[dept].ages.reduce((sum, age) => sum + age, 0) / summary[dept].ages.length).toFixed(1)
+          : 'N/A';
+        return [
+          dept,
+          Array.from(summary[dept].roles).join(', '),
+          Array.from(summary[dept].jobTitles).join(', '),
+          avgAge,
+          Array.from(summary[dept].locations).join(', ')
+        ];
+      });
+
+      doc.autoTable({
+        head: [['Department', 'Roles', 'Job Titles', 'Average Age', 'Locations']],
+        body: tableData,
+        startY: 35,
+        styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [79, 70, 229], textColor: [255, 255, 255], fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [245, 245, 245] },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 40 },
+          2: { cellWidth: 40 },
+          3: { cellWidth: 20 },
+          4: { cellWidth: 40 }
+        },
+        margin: { top: 35 }
+      });
+
+      const pageCount = doc.internal.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(10);
+        doc.setTextColor(100);
+        doc.text(`Generated on ${new Date().toLocaleDateString()}`, 10, doc.internal.pageSize.height - 10);
+        doc.text('Developed by Mohi Uddin Risat', doc.internal.pageSize.width - 60, doc.internal.pageSize.height - 10);
+      }
+
+      doc.save('employee_summary.pdf');
+      console.log('Summary PDF downloaded');
+    });
+
+    // Clear all data handler
+    document.getElementById('clearAllBtn').addEventListener('click', function() {
+      if (confirm('Are you sure you want to delete all employee data? This action cannot be undone.')) {
+        employees = [];
+        if (storageAvailable('localStorage')) {
+          localStorage.removeItem('employees');
+          console.log('All employee data cleared from localStorage');
+        }
+        updateEmployeeList();
+        updateReportPreview();
+        alert('All employee data has been cleared.');
+      }
+    });
+
+    // Search functionality for employee list
+    document.getElementById('searchInput').addEventListener('change', updateEmployeeList);
+    document.getElementById('searchField').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        updateEmployeeList();
+      }
+    });
+    document.getElementById('searchInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        updateEmployeeList();
+      }
+    });
+
+    // Report preview handlers
+    document.getElementById('filterInput').addEventListener('change', updateReportPreview);
+    document.getElementById('filterField').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        updateReportPreview();
+      }
+    });
+    document.getElementById('filterInput').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') {
+        updateReportPreview();
+      }
+    });
+    document.getElementById('reportType').addEventListener('change', updateReportPreview);
+
+    // Normalize field input
+    function normalizeField(field) {
+      return field.toLowerCase().trim().replace(/\s+/g, '');
+    }
+
+    // Validate field input
+    function isValidField(field) {
+      return validFields.includes(normalizeField(field));
+    }
+
+    // Update employee list display
+    function updateEmployeeList() {
+      const employeeTable = document.getElementById('employeeTable');
+      const searchField = normalizeField(document.getElementById('searchField').value);
+      const searchTerm = document.getElementById('searchInput').value;
+      const errorElement = document.getElementById('searchFieldError');
+      employeeTable.innerHTML = '';
+
+      if (!searchField) {
+        errorElement.classList.remove('hidden');
+        employeeTable.innerHTML = '<p class="text-gray-600">Please select a search field.</p>';
+        return;
+      } else {
+        errorElement.classList.add('hidden');
+      }
+
+      const filteredEmployees = searchTerm
+        ? employees.filter(emp => {
+            const field = searchField.replace('jobtitle', 'jobTitle');
+            const value = field === 'age' ? emp[field].toString() : emp[field];
+            return value.toString().toLowerCase() === searchTerm.toLowerCase();
+          })
+        : employees;
+
+      if (filteredEmployees.length === 0) {
+        employeeTable.innerHTML = '<p class="text-gray-600">No employees found. Add employees or clear search filters.</p>';
+        return;
+      }
+
+      filteredEmployees.forEach((emp, index) => {
+        const li = document.createElement('li');
+        li.className = 'bg-gray-50 p-4 rounded-md shadow-sm hover:shadow-md transition-shadow';
+        li.innerHTML = `
+          <div class="flex justify-between items-center">
+            <div>
+              <strong class="text-lg">${emp.name}</strong> <span class="text-indigo-600">(${emp.jobTitle})</span><br>
+              Email: ${emp.email}<br>
+              Role: ${emp.role}<br>
+              Department: ${emp.department}<br>
+              Location: ${emp.location}<br>
+              Age: ${emp.age}
+            </div>
+            <div class="flex space-x-2">
+              <button class="edit-btn action-btn bg-blue-600 text-white rounded-md hover:bg-blue-700"
+                      data-index="${index}" title="Edit this employee">
+                Edit
+              </button>
+              <button class="delete-btn action-btn bg-red-600 text-white rounded-md hover:bg-red-700"
+                      data-index="${index}" title="Delete this employee">
+                Delete
+              </button>
+            </div>
+          </div>
+        `;
+        employeeTable.appendChild(li);
+      });
+
+      try {
+        document.querySelectorAll('.edit-btn').forEach(button => {
+          button.addEventListener('click', function() {
+            console.log('Edit button clicked for index:', this.getAttribute('data-index'));
+            editIndex = parseInt(this.getAttribute('data-index'));
+            const emp = employees[editIndex];
+            document.getElementById('name').value = emp.name;
+            document.getElementById('email').value = emp.email.replace(emailExtension, '');
+            roleSelect.value = emp.role;
+            newRoleInput.value = '';
+            newRoleInput.classList.add('hidden');
+            departmentSelect.value = emp.department;
+            newDepartmentInput.value = '';
+            newDepartmentInput.classList.add('hidden');
+            locationSelect.value = emp.location;
+            newLocationInput.value = '';
+            newLocationInput.classList.add('hidden');
+            jobTitleSelect.value = emp.jobTitle;
+            newJobTitleInput.value = '';
+            newJobTitleInput.classList.add('hidden');
+            ageSelect.value = emp.age.toString();
+            newAgeInput.value = '';
+            newAgeInput.classList.add('hidden');
+            alertMessage.classList.add('hidden');
+            showSection('create');
+          });
+        });
+
+        document.querySelectorAll('.delete-btn').forEach(button => {
+          button.addEventListener('click', function() {
+            console.log('Delete button clicked for index:', this.getAttribute('data-index'));
+            const index = parseInt(this.getAttribute('data-index'));
+            if (confirm(`Are you sure you want to delete ${employees[index].name}'s data?`)) {
+              employees.splice(index, 1);
+              if (storageAvailable('localStorage')) {
+                localStorage.setItem('employees', JSON.stringify(employees));
+                console.log('Employee deleted, updated localStorage:', employees);
+              }
+              updateEmployeeList();
+              updateReportPreview();
+            }
+          });
+        });
+      } catch (error) {
+        console.error('Error attaching event listeners:', error);
+      }
+    }
+
+    // Update report preview
+    function updateReportPreview() {
+      const reportPreview = document.getElementById('reportPreview');
+      const reportType = document.getElementById('reportType').value;
+      const filterField = normalizeField(document.getElementById('filterField').value);
+      const filterValue = document.getElementById('filterInput').value;
+      const errorElement = document.getElementById('filterFieldError');
+      reportPreview.innerHTML = '';
+
+      if (!filterField) {
+        errorElement.classList.remove('hidden');
+        reportPreview.innerHTML = '<p class="text-gray-600">Please select a filter field.</p>';
+        return;
+      } else {
+        errorElement.classList.add('hidden');
+      }
+
+      const filteredEmployees = filterValue
+        ? employees.filter(emp => {
+            const field = filterField.replace('jobtitle', 'jobTitle');
+            const value = field === 'age' ? emp[field].toString() : emp[field];
+            return value.toString().toLowerCase() === filterValue.toLowerCase();
+          })
+        : employees;
+
+      if (filteredEmployees.length === 0) {
+        reportPreview.innerHTML = '<p class="text-gray-600">No matching data found.</p>';
+        return;
+      }
+
+      if (reportType === 'detailed') {
+        const table = document.createElement('table');
+        table.className = 'preview-table';
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Role</th>
+              <th>Department</th>
+              <th>Job Location</th>
+              <th>Job Title</th>
+              <th>Age</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filteredEmployees.map(emp => `
+              <tr>
+                <td>${emp.name}</td>
+                <td>${emp.email}</td>
+                <td>${emp.role}</td>
+                <td>${emp.department}</td>
+                <td>${emp.location}</td>
+                <td>${emp.jobTitle}</td>
+                <td>${emp.age}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        `;
+        reportPreview.appendChild(table);
+      } else {
+        const summary = {};
+        filteredEmployees.forEach(emp => {
+          if (!summary[emp.department]) {
+            summary[emp.department] = {
+              roles: new Set(),
+              jobTitles: new Set(),
+              ages: [],
+              locations: new Set()
+            };
+          }
+          summary[emp.department].roles.add(emp.role);
+          summary[emp.department].jobTitles.add(emp.jobTitle);
+          summary[emp.department].ages.push(emp.age);
+          summary[emp.department].locations.add(emp.location);
+        });
+
+        const table = document.createElement('table');
+        table.className = 'preview-table';
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Roles</th>
+              <th>Job Titles</th>
+              <th>Average Age</th>
+              <th>Locations</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${Object.keys(summary).map(dept => {
+              const avgAge = summary[dept].ages.length > 0
+                ? (summary[dept].ages.reduce((sum, age) => sum + age, 0) / summary[dept].ages.length).toFixed(1)
+                : 'N/A';
+              return `
+                <tr>
+                  <td>${dept}</td>
+                  <td>${Array.from(summary[dept].roles).join(', ')}</td>
+                  <td>${Array.from(summary[dept].jobTitles).join(', ')}</td>
+                  <td>${avgAge}</td>
+                  <td>${Array.from(summary[dept].locations).join(', ')}</td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        `;
+        reportPreview.appendChild(table);
+      }
+    }
+
+    // Initial list update
+    showSection('create');
+    updateEmployeeList();
+    updateReportPreview();
+    console.log('Page loaded, initial state:', { employees, roles, departments, locations, jobTitles, ages });
+  </script>
+</body>
+</html>
